@@ -37,6 +37,18 @@ if platform.startswith("win"):
 elif platform.startswith("linux"):
     cxx = "g++"
     cc = "gcc"
+elif platform.startswith("mac"):
+    # Native clang on a macOS host (CI runners, local Macs); osxcross only when
+    # cross-compiling from Linux/Windows.
+    if host_platform.startswith("darwin"):
+        cxx = "clang++"
+        cc = "clang"
+    else:
+        cxx = "o64-clang++"
+        cc = "o64-clang"
+else:
+    print(f"Unsupported target platform: {platform}")
+    Exit(1)
 
 
 
@@ -126,11 +138,55 @@ elif platform.startswith("linux"):
     ])
     env.Append(CXXFLAGS=["-std=c++17", "-O2", "-fPIC"])
 
+elif platform.startswith("mac"):
+    output_dir = "bin/macos"
+    os.makedirs(output_dir, exist_ok=True)
+
+    arch = ARGUMENTS.get("arch", "universal")
+    lib_suffix = f"macos.template_{build_type}.{arch}"
+
+    env["SHLIBSUFFIX"] = ".dylib"
+
+    env.Append(CPPPATH=[
+        f"{fixpath(godot_cpp_path)}/include",
+        f"{fixpath(godot_cpp_path)}/include/godot_cpp",
+        f"{fixpath(godot_cpp_path)}/gen/include",
+        f"{fixpath(godot_cpp_path)}/gdextension",
+        "src"
+    ])
+
+    env.Append(LIBPATH=[
+        f"{fixpath(godot_cpp_path)}/bin",
+    ])
+
+    env.Append(LIBS=[
+        f"godot-cpp.{lib_suffix}",
+    ])
+
+    # miniaudio's CoreAudio backend needs these frameworks on Apple platforms.
+    env.Append(FRAMEWORKS=["CoreFoundation", "CoreAudio", "AudioToolbox"])
+
+    env.Append(CXXFLAGS=["-std=c++17", "-O2", "-fPIC"])
+
+    # This file drives the compiler directly, so scons' own -arch handling is
+    # bypassed: without forwarding it explicitly a "universal" build would
+    # silently produce a host-only binary under a universal name.
+    arch_flags = (
+        ["-arch", "x86_64", "-arch", "arm64"]
+        if arch == "universal"
+        else ["-arch", arch]
+    )
+    env.Append(CCFLAGS=arch_flags)
+    env.Append(CXXFLAGS=arch_flags)
+    env.Append(LINKFLAGS=arch_flags)
+
 
 target_name = (
     f"bin/windows/MiniAudio.{lib_suffix}.dll"
     if platform.startswith("win")
     else f"bin/linux/MiniAudio.{lib_suffix}.so"
+    if platform.startswith("linux")
+    else f"bin/macos/MiniAudio.{lib_suffix}.dylib"
 )
 
 env.SharedLibrary(target=target_name, source=sources)
