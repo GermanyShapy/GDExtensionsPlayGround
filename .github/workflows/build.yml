@@ -67,8 +67,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Homebrew's python3 is PEP 668 externally-managed, so the flag is
+      # required on macOS runners (ubuntu's pip is old and rejects it).
       - name: Install SCons
-        run: python3 -m pip install --upgrade scons
+        run: python3 -m pip install --break-system-packages --upgrade scons
 
       - name: Fetch godot-cpp
         run: git clone --depth 1 --branch "$GODOT_CPP_REF" "$GODOT_CPP_REPO" godot-cpp
