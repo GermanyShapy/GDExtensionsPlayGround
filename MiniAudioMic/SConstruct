@@ -163,9 +163,6 @@ elif platform.startswith("mac"):
         f"godot-cpp.{lib_suffix}",
     ])
 
-    # miniaudio's CoreAudio backend needs these frameworks on Apple platforms.
-    env.Append(FRAMEWORKS=["CoreFoundation", "CoreAudio", "AudioToolbox"])
-
     env.Append(CXXFLAGS=["-std=c++17", "-O2", "-fPIC"])
 
     # This file drives the compiler directly, so scons' own -arch handling is
@@ -178,7 +175,16 @@ elif platform.startswith("mac"):
     )
     env.Append(CCFLAGS=arch_flags)
     env.Append(CXXFLAGS=arch_flags)
-    env.Append(LINKFLAGS=arch_flags)
+    env.Append(LINKFLAGS=arch_flags + [
+        # macOS ld rejects undefined symbols by default, but a GDExtension
+        # resolves godot-cpp's symbols from the host engine at load time.
+        "-undefined", "dynamic_lookup",
+        # miniaudio's CoreAudio backend needs these on Apple platforms.
+        # FRAMEWORKS is ignored here, so spell them out as linker flags.
+        "-framework", "CoreFoundation",
+        "-framework", "CoreAudio",
+        "-framework", "AudioToolbox",
+    ])
 
 
 target_name = (
